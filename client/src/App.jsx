@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { createFollowUp, deleteFollowUp, getFollowUps, updateFollowUp } from './services/followUpService.js';
+import { useEffect, useRef, useState } from 'react';
+import { completeFollowUp, createFollowUp, deleteFollowUp, getFollowUps, updateFollowUp } from './services/followUpService.js';
 
 const emptyForm = {
   title: '',
@@ -8,16 +8,54 @@ const emptyForm = {
   dueDate: '',
 };
 
+function getLocalDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getFollowUpDateClassification(followUp, todayDateKey) {
+  if (followUp.status !== 'Pending') {
+    return null;
+  }
+
+  const dueDateKey = followUp.dueDate.slice(0, 10);
+  if (dueDateKey === todayDateKey) {
+    return 'Due';
+  }
+
+  if (dueDateKey > todayDateKey) {
+    return 'Upcoming';
+  }
+
+  if (dueDateKey < todayDateKey) {
+    return 'Overdue';
+  }
+
+  return null;
+}
+
 export default function App() {
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [message, setMessage] = useState(null);
   const [followUps, setFollowUps] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('All');
   const [isLoadingFollowUps, setIsLoadingFollowUps] = useState(true);
   const [followUpsError, setFollowUpsError] = useState('');
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const selectedFollowUpRef = useRef(null);
+  const todayDateKey = getLocalDateKey(new Date());
+  const filteredFollowUps = statusFilter === 'All'
+    ? followUps
+    : followUps.filter((followUp) => followUp.status === statusFilter);
+  const isSelectedFollowUpVisible = filteredFollowUps.some(
+    (followUp) => followUp._id === selectedFollowUp?._id,
+  );
 
   useEffect(() => {
     async function loadFollowUps() {
@@ -33,6 +71,21 @@ export default function App() {
 
     loadFollowUps();
   }, []);
+
+  useEffect(() => {
+    if (!selectedFollowUp || !isSelectedFollowUpVisible) {
+      return undefined;
+    }
+
+    function handleOutsideClick(event) {
+      if (selectedFollowUpRef.current && !selectedFollowUpRef.current.contains(event.target)) {
+        setSelectedFollowUp(null);
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [selectedFollowUp, isSelectedFollowUpVisible]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -84,6 +137,28 @@ export default function App() {
       setMessage({ type: 'error', text: error.message });
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function handleComplete() {
+    if (!selectedFollowUp || selectedFollowUp.status !== 'Pending') {
+      return;
+    }
+
+    setIsCompleting(true);
+    setMessage(null);
+
+    try {
+      const completedFollowUp = await completeFollowUp(selectedFollowUp._id);
+      setFollowUps((currentFollowUps) => currentFollowUps.map((followUp) => (
+        followUp._id === completedFollowUp._id ? completedFollowUp : followUp
+      )));
+      setSelectedFollowUp(completedFollowUp);
+      setMessage({ type: 'success', text: 'Follow-up marked as completed.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setIsCompleting(false);
     }
   }
 
@@ -153,23 +228,54 @@ export default function App() {
         <h2 id="follow-ups-heading">Saved follow-ups</h2>
         {isLoadingFollowUps && <p role="status">Loading follow-ups…</p>}
         {!isLoadingFollowUps && followUpsError && <p className="message error" role="alert">{followUpsError}</p>}
-        {!isLoadingFollowUps && !followUpsError && followUps.length === 0 && (
-          <p>No follow-ups have been created yet.</p>
-        )}
-        {!isLoadingFollowUps && !followUpsError && followUps.length > 0 && (
-          <ul className="follow-up-list">
-            {followUps.map((followUp) => (
-              <li key={followUp._id}>
+        {!isLoadingFollowUps && !followUpsError && (
+          <>
+            <div className="status-filter">
+              <label htmlFor="statusFilter">Filter by status</label>
+              <select
+                id="statusFilter"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+
+            {followUps.length === 0 && <p>No follow-ups have been created yet.</p>}
+            {followUps.length > 0 && filteredFollowUps.length === 0 && (
+              <p>No {statusFilter.toLowerCase()} follow-ups found.</p>
+            )}
+            {filteredFollowUps.length > 0 && (
+              <ul className="follow-up-list">
+                {filteredFollowUps.map((followUp) => {
+              const dateClassification = getFollowUpDateClassification(followUp, todayDateKey);
+
+              return (
+              <li
+                key={followUp._id}
+                ref={selectedFollowUp?._id === followUp._id ? selectedFollowUpRef : null}
+              >
                 <button
                   className="follow-up-card"
                   type="button"
                   aria-pressed={selectedFollowUp?._id === followUp._id}
                   disabled={Boolean(editingId) || isDeleting}
-                  onClick={() => setSelectedFollowUp(followUp)}
+                  onClick={() => setSelectedFollowUp((current) => (
+                    current?._id === followUp._id ? null : followUp
+                  ))}
                 >
-                  <span className="follow-up-card-title">{followUp.title}</span>
+                  <span className="follow-up-card-title">
+                    {followUp.title}
+                    {dateClassification && (
+                      <span className={`${dateClassification.toLowerCase()}-badge`}>
+                        {dateClassification}
+                      </span>
+                    )}
+                  </span>
                   <span className="follow-up-card-line"><strong>Customer:</strong> {followUp.customerName}</span>
-                  <span className="follow-up-card-line"><strong>Due date:</strong> {new Date(followUp.dueDate).toLocaleDateString()}</span>
+                  <span className="follow-up-card-line"><strong>Due date:</strong> {followUp.dueDate.slice(0, 10)}</span>
                   <span className="follow-up-card-line"><strong>Status:</strong> {followUp.status}</span>
                 </button>
                 {selectedFollowUp?._id === followUp._id && (
@@ -178,10 +284,15 @@ export default function App() {
                     <h3>{followUp.title}</h3>
                     <p><strong>Customer name:</strong> {followUp.customerName}</p>
                     <p><strong>Description:</strong> {followUp.description?.trim() || 'No description provided.'}</p>
-                    <p><strong>Due date:</strong> {new Date(followUp.dueDate).toLocaleDateString()}</p>
+                    <p><strong>Due date:</strong> {followUp.dueDate.slice(0, 10)}</p>
                     <p><strong>Status:</strong> {followUp.status}</p>
                     {!editingId && (
                       <>
+                        {followUp.status === 'Pending' && (
+                          <button type="button" onClick={handleComplete} disabled={isCompleting}>
+                            {isCompleting ? 'Marking completed…' : 'Mark as Completed'}
+                          </button>
+                        )}
                         <button type="button" onClick={handleEdit}>Edit follow-up</button>
                         <button className="danger-button" type="button" onClick={handleDelete} disabled={isDeleting}>
                           {isDeleting ? 'Deleting…' : 'Delete follow-up'}
@@ -191,8 +302,11 @@ export default function App() {
                   </section>
                 )}
               </li>
-            ))}
-          </ul>
+              );
+            })}
+              </ul>
+            )}
+          </>
         )}
       </section>
     </main>

@@ -64,6 +64,26 @@ export async function updateFollowUp(id, followUp) {
   return result;
 }
 
+export async function completeFollowUp(id) {
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/follow-ups/${id}/status`, {
+      method: 'PATCH',
+    });
+  } catch {
+    throw new Error('Could not reach the server. Please try again.');
+  }
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.error || 'Could not complete the follow-up.');
+  }
+
+  return result;
+}
+
 export async function deleteFollowUp(id) {
   let response;
 

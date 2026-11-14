@@ -123,6 +123,31 @@ export async function updateFollowUp(request, response, next) {
   }
 }
 
+export async function completeFollowUp(request, response, next) {
+  const { id } = request.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return response.status(400).json({ error: 'Invalid follow-up ID.' });
+  }
+
+  try {
+    const followUp = await FollowUp.findById(id);
+    if (!followUp) {
+      return response.status(404).json({ error: 'Follow-up not found.' });
+    }
+
+    if (followUp.status !== 'Pending') {
+      return response.status(409).json({ error: 'Only pending follow-ups can be completed.' });
+    }
+
+    followUp.status = 'Completed';
+    const completedFollowUp = await followUp.save();
+    return response.json(completedFollowUp);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 export async function deleteFollowUp(request, response, next) {
   const { id } = request.params;
 
