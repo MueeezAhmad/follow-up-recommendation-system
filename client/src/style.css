@@ -1,0 +1,64 @@
+:root {
+  font-family: Arial, sans-serif;
+  color: #1f2937;
+  background: #f8fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+main {
+  max-width: 720px;
+  margin: 4rem auto;
+  padding: 0 1.5rem;
+}
+
+form {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 520px;
+  margin-top: 2rem;
+}
+
+input,
+textarea,
+button {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.7rem;
+  font: inherit;
+}
+
+input,
+textarea {
+  margin-bottom: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: white;
+}
+
+button {
+  border: 0;
+  border-radius: 4px;
+  color: white;
+  background: #1d4ed8;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.message.success {
+  color: #166534;
+}
+
+.message.error {
+  color: #b91c1c;
+}
